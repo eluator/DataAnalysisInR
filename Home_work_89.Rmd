@@ -1,0 +1,98 @@
+---
+title: "Home_work_89"
+author: "Тимофеев Игорь, 391 гр."
+date: '19 декабря 2016 г '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+##KNN - метод к ближайших соседей.
+
+```{r}
+Boston=read.table("~/Загрузки/Книги/Программирование/Теорвер/Восьмое/01_Boston housing/housing1.data", dec = ".", sep = ",", header = T)
+Boston[1:5,]
+class(Boston[,14])
+Boston[1:5,14]
+Boston$MEDV=as.factor(ifelse(Boston$MEDV>mean(Boston$MEDV),"богатые","бедные"))
+Boston[1:5,14]
+set.seed(1234)
+test.num <- sample(1:nrow(Boston), 100, replace = FALSE) 
+learn=Boston[-test.num,1:13]
+test=Boston[test.num,1:13]
+cl=Boston[-test.num,14]
+library(class)
+a=c(1:15)
+for(i in 1:15){
+ a[i]=sum(knn(learn,test,cl, k=i,prob = T)!=Boston[test.num,14])
+}
+a
+KNN=knn(learn,learn,cl, k=3,prob = T)
+t=table(KNN, Boston[-test.num, 14])
+t
+table(Boston[test.num, 14])
+(sum(t)-sum(diag(t)))*100/sum(t)
+KNN=knn(learn,test,cl, k=3,prob = T)
+t=table(KNN, Boston[test.num, 14])
+t
+table(Boston[test.num, 14])
+(sum(t)-sum(diag(t)))*100/sum(t)
+```
+
+Лучшее количество к ближайших соседей -3. Вот результат разбиения на классы.
+
+##Деревья классификации.
+
+```{r}
+library(rpart)
+str(Boston)
+Boston.res=rpart(MEDV~.,
+            data = Boston[-test.num,], method="class",
+            control=rpart.control(minsplit=10, minbucket=5, maxdepth=6))
+print(Boston.res, digits = 2)
+#plot(Boston.res)
+#text(Boston.res, use.n=T)
+library(rpart.plot)
+rpart.plot(Boston.res, type=2, extra = 1)
+```
+
+Дерево классификации.
+
+```{r}
+head(predict(Boston.res, Boston[ , -14], type="class"))
+head(predict(Boston.res, Boston[ , -14])[ , 2])
+t=table(Boston[-test.num , 14], predict(Boston.res, Boston[-test.num,-14], type="class"))
+t
+table(Boston[test.num , 14])
+(sum(t)-sum(diag(t)))*100/sum(t)
+t=table(Boston[test.num , 14], predict(Boston.res, Boston[test.num,-14], type="class"))
+t
+table(Boston[test.num , 14])
+(sum(t)-sum(diag(t)))*100/sum(t)
+```
+
+Вот такой результат.
+
+##Леса
+```{r}
+library(randomForest)
+
+test <- Boston[test.num, 1:14]
+train <- Boston[-test.num, 1:14]
+x <- train[, 1:13]
+x.test <- test[ ,1:13]
+y <- train[, 14]
+y.test <- test[, 14]
+y.1 <- as.factor(y)
+n=500
+nodesize1=10
+rf <- randomForest(x, y=y.1, ntree=n, mtry=floor(sqrt(ncol(train))),
+                       replace=TRUE, nodesize = nodesize1,
+                       importance=TRUE, localImp=FALSE,
+                       proximity=FALSE, norm.votes=TRUE, do.trace=n/10,
+                       keep.forest=TRUE, corr.bias=FALSE, keep.inbag=FALSE)
+rf
+```
+

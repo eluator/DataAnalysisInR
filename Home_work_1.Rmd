@@ -1,0 +1,170 @@
+---
+title: "t-критерий Стьюдента"
+author: "Тимофеев И., 391 группа"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Сравнение среднего процента брака на 1 и 5 заводах (t-тест) - задача 4, пункт 5
+## Гипотезы
+Нулевая гипотеза: процент брака на первом заводе не статистически значимо отличается от процента брака на пятом заводе.
+
+Альтернативная гипотеза: процент брака на первом заводе статистически значимо отличается от процента брака на пятом заводе.
+
+Уровень значимости $\alpha$ возьмем равным 0.05. Т.е. мы можем отклонить $H_0$ только, если вероятность ошибки при ее отклонении составляет меньше 0.05.
+
+##Проверка
+```{r,echo=FALSE}
+library(ggplot2)
+library(caret)
+library(e1071)
+library(car)
+#Считывание данных из таблицы Waste Run Up
+WasteRunUp=read.csv("~/Загрузки/Книги/Программирование/Теорвер/Zadachi/Waste Run Up/Waste Run Up_data2.csv",dec=",")
+WasteRunUp_15=data.frame(PT1=WasteRunUp$PT1,PT5=WasteRunUp$PT5)
+#Преобразование в дата фрейм с факторной переменной PT
+PT1=c(1:22)
+PT5=c(1:22)
+f1=function(x){x="PT1"}
+f5=function(x){x="PT5"}
+PT1=sapply(PT1,f1)
+PT5=sapply(PT5,f5)
+PT_pos=as.factor(c(PT1[WasteRunUp_15$PT1 >= 0],PT5[WasteRunUp_15$PT5 >= 0]))
+PT=as.factor(c(PT1,PT5[WasteRunUp_15$PT5 != -9999.0]))
+#WasteRunUp_15_Update_pos=data.frame(Num=c(WasteRunUp_15$PT1[WasteRunUp_15$PT1 >= 0],WasteRunUp_15$PT5[WasteRunUp_15$PT5 >= 0]),PT=PT_pos)
+WasteRunUp_15_Update=data.frame(Num=c(WasteRunUp_15$PT1,WasteRunUp_15$PT5[WasteRunUp_15$PT5 != -9999.0]),PT=PT)
+
+#Сдвигаем графики так, чтобы были только положительные значения
+min_WasteRunUp_15_Update=min(WasteRunUp_15_Update$Num)
+WasteRunUp_15_Update$Num=WasteRunUp_15_Update$Num-min_WasteRunUp_15_Update+1
+#Графики
+boxplot_WRU_15_Up=ggplot(WasteRunUp_15_Update, aes(PT,Num))+
+  geom_boxplot()
+
+hist_WRU_15_Up=ggplot(WasteRunUp_15_Update, aes(Num))+
+  geom_histogram(fill="white",col="black",binwidth = 5.0)+
+  facet_grid(PT ~ .)
+
+density_WRU_15_Up=ggplot(WasteRunUp_15_Update, aes(Num,fill=PT))+
+  geom_density(alpha=0.5)
+density_WRU_15_Up_Num=ggplot(WasteRunUp_15_Update, aes(Num))+
+  geom_density(alpha=0.5)
+
+#Тест на нормальность распределения
+shtest_PT1=shapiro.test(x = WasteRunUp_15_Update$Num[PT=="PT1"])
+shtest_PT5=shapiro.test(x = WasteRunUp_15_Update$Num[PT=="PT5"])
+
+#Преобразование Бокса Кокса
+Lambda_WasteRunUp_15_Update=BoxCoxTrans(WasteRunUp_15_Update$Num)
+BoxCox_WasteRunUp_15_Update=predict(Lambda_WasteRunUp_15_Update,WasteRunUp_15_Update$Num)
+WasteRunUp_15_Update_BoxCox=data.frame(Num=BoxCox_WasteRunUp_15_Update,PT=WasteRunUp_15_Update$PT)
+
+#Графики для Бокса Кокса
+boxplot_WRU_15_Up_BoxCox=ggplot(WasteRunUp_15_Update_BoxCox, aes(PT,Num))+
+  geom_boxplot()
+hist_WRU_15_Up_BoxCox=ggplot(WasteRunUp_15_Update_BoxCox, aes(Num))+
+  geom_histogram(fill="white",col="black",binwidth = predict(Lambda_WasteRunUp_15_Update,5.0))+
+  facet_grid(PT ~ .)
+density_WRU_15_Up_BoxCox=ggplot(WasteRunUp_15_Update_BoxCox, aes(Num,fill=PT))+
+  geom_density(alpha=0.5)
+density_WRU_15_Up_Num_BoxCox=ggplot(WasteRunUp_15_Update_BoxCox, aes(Num))+
+  geom_density(alpha=0.5)
+
+#Тест на нормальность распределения для Бокса Кокса
+shtest_BoxCox_PT1=shapiro.test(x = WasteRunUp_15_Update_BoxCox$Num[PT=="PT1"])
+shtest_BoxCox_PT5=shapiro.test(x = WasteRunUp_15_Update_BoxCox$Num[PT=="PT5"])
+
+#U-test, Критерий Манна-Уитни
+Utest_WasteRunUp_15_Update_BoxCox=wilcox.test(Num ~ PT,WasteRunUp_15_Update_BoxCox, paired = FALSE)
+#Тест на гомогенность дисперсии
+disptest=bartlett.test(Num ~ PT, WasteRunUp_15_Update_BoxCox)
+
+#t-test, Критерий Стьюдента
+ttest=t.test(Num ~ PT,WasteRunUp_15_Update_BoxCox,var.equal = ifelse(disptest$p.value>=0.05,T,F))
+```
+
+Сначала посмотрим на структуру наших данных:
+```{r}
+str(WasteRunUp_15_Update)
+head(WasteRunUp_15_Update)
+```
+Эти данные получены из первоначального дата фрейма с пятью переменными и переведены в дата фрейм с двумя перменными: Num - процент брака, PT - завод к которому принадлежит измерение. А затем данные Num сдвинуты на $|min(Num)|+1$ вправо, чтобы не было отрицательных значений и нуля.
+
+Затем построим график boxplot:
+```{r}
+boxplot_WRU_15_Up
+```
+Можно заметить, что значения для первого завода распределяются очень плохо(далеко от нормального) с большим количеством сильных выбросов, попробуем построить еще несколько графиков, чтобы дополнительно проиллюстрировать это.
+```{r}
+hist_WRU_15_Up
+density_WRU_15_Up
+```
+На histogram видно, что данные с первого завода сгрупированны слева, но при этом далеко справа имеется сильный выброс, на boxplot его также можно было увидеть ближе к значению 60%. По density можно сказать примерно тоже самое.
+
+Теперь нужно проверить насколько в действительности его значения отклоняются от нормального, чтобы сделать окончательный вывод.
+
+Шапиро тест для первого завода:
+```{r}
+shtest_PT1
+```
+Значение p-value=`r shtest_PT1$p.value`, что намного меньше значения 0.05 или даже 0.01, т.е. позволяет нам отвергнуть нулевую гипотезу о том, что данное распределение совпадает с нормальным. Для пятого завода все не так плохо `r shtest_PT5$p.value`, но нам нужно, чтобы оба распределения были близки к нормальному.
+
+Поробуем применить метод Бокса Кокса для приведения распределения PT1 к нормальному, но так как нам нужно сместить оба распределения одинаково, то придется применять метод к распределению всех значений, что может плохо сказать на результате.
+
+Для начала посмотрим на общее распределение, чтобы сравнить его с результатом после применения метода.
+```{r}
+density_WRU_15_Up_Num
+```
+
+Теперь найдем $\lambda$ для метода Бокса Кокса:
+```{r}
+Lambda_WasteRunUp_15_Update
+```
+
+Получили максимально удобное значение $\lambda$ равное `r Lambda_WasteRunUp_15_Update$lambda` и по нему построили распределения.
+
+Первые элементы получившегося распределения:
+```{r}
+head(WasteRunUp_15_Update_BoxCox)
+```
+
+Построим график для общего распределения:
+```{r}
+density_WRU_15_Up_Num_BoxCox
+```
+
+Теперь построим boxplot, histogram и density для нового распределения:
+```{r}
+boxplot_WRU_15_Up_BoxCox
+hist_WRU_15_Up_BoxCox
+density_WRU_15_Up_BoxCox
+```
+На графиках видно, что распределение у первого завода значительно улучшилось, в то время как у пятого все стало хуже.
+Проведем Шапиро тест для нового распределения:
+```{r}
+shtest_BoxCox_PT1
+shtest_BoxCox_PT5
+```
+Значение p-value для первого завода составляет `r shtest_BoxCox_PT1$p.value`, а для пятого `r shtest_BoxCox_PT5$p.value`, что означает, что нам не удасться преобразовать наши распределения общими методами так, чтобы они были достаточно близки к нормальным.
+По графикам было видно, что нормальности распределения сильно мешают большие выбросы, для такого случая может подойти U-test или Критерий Манна-Уитни, который вместо того, чтобы просто сравнивать средние значения распределений, сначала ранжирует эти значения, убирая зависимость от резких выбросов, а затем уже сравнивает средние.
+```{r}
+Utest_WasteRunUp_15_Update_BoxCox
+```
+Результатом будет p значение равное `r Utest_WasteRunUp_15_Update_BoxCox$p.value`, что меньше 0.05 и позволяет нам отклонить нулевую гипотезу $H_0$ о том, что распределения не отличаются на статистически значимую величину.
+
+Теперь посмотрим на гомогенность дисперсии:
+```{r}
+disptest
+```
+Значение p-value хорошее `r disptest$p.value`>0.05, так что в t-test гомогенность дисперсии можно учитывать.
+
+Для того, чтобы сравнить результат U-test и t-test, проведем последний:
+```{r}
+ttest
+```
+Итак значение величины p в критерии Стьюдента для распределения брака на 1 и 5 заводах составляет `r ttest$p.value` > 0.05, что ожидаемо, т.к. распределения так и не были приведены к нормальным и сильные выбросы испортили картину.
+
+Вывод: Мы выяснили, что распределения брака на 1 и 5 заводах действительно отличаются на статистически значимую величину, т.е. верна Альтернативная гипотеза. Но при этом t-test оказался неприменим в этой задаче.

@@ -1,0 +1,254 @@
+---
+title: "Случайные леса и gradient boosting machine."
+author: "Тимофеев Игорь, 391 гр."
+date: '20 декабря 2016 г '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+
+##RandomForest
+
+```{r}
+set.seed(1234)
+Boston=read.table("~/Загрузки/Книги/Программирование/Теорвер/Восьмое/01_Boston housing/housing1.data", dec = ".", sep = ",", header = T)
+Boston$MEDV=as.factor(ifelse(Boston$MEDV>mean(Boston$MEDV),"богатые","бедные"))
+
+names(Boston)=c("преступность","разреженность_населения","торговля", "река","загазованность","комнаты","старые","расстояние_1","расстояние_2","налог", "ученики","афроамериканцы", "соц_статус","цена")
+str(Boston)
+```
+```{r}
+library(randomForest)
+
+test.num <- sample(1:nrow(Boston), 100, replace = FALSE) 
+test <- Boston[test.num, 1:14]
+train <- Boston[-test.num, 1:14]
+x <- train[, 1:13]
+x.test <- test[ ,1:13]
+y <- train[, 14]
+y.test <- test[, 14]
+y.1 <- as.factor(y)
+```
+
+```{r,echo=T}
+n=100
+nodesize1=1
+rf <- randomForest(x, y=y.1, ntree=n, mtry=floor(sqrt(ncol(train))),
+                   replace=TRUE, nodesize = nodesize1,
+                   importance=TRUE, localImp=FALSE,
+                   proximity=FALSE, norm.votes=TRUE, do.trace=n/10,
+                   keep.forest=TRUE, corr.bias=FALSE, keep.inbag=FALSE)
+```
+
+По получившейся таблице видно, что лучше указать 50-100 деревьев(более точные значения были получены подбором).
+
+```{r}
+train.predict=predict(rf,train)
+tab.train=table(y,train.predict)
+tab.train
+(sum(tab.train)-sum(diag(tab.train)))*100/sum(tab.train)
+test.predict=predict(rf,test)
+tab.test=table(y.test,test.predict)
+tab.test
+(sum(tab.test)-sum(diag(tab.test)))*100/sum(tab.test)
+```
+
+Это результат в первом приближении, очевидно, переобучение. Теперь с подобранными характеристиками леса:
+
+
+```{r,echo=T}
+n=30
+nodesize1=40
+max=10
+rf <- randomForest(x, y=y.1, ntree=n, mtry=floor(sqrt(ncol(train))),
+                   replace=TRUE, nodesize = nodesize1, maxnodes = max,
+                   importance=TRUE, localImp=FALSE,
+                   proximity=FALSE, norm.votes=TRUE, do.trace=n/10,
+                   keep.forest=TRUE, corr.bias=FALSE, keep.inbag=FALSE)
+rf
+```
+
+
+
+
+```{r}
+train.predict=predict(rf,x)
+tab.train=table(y,train.predict)
+tab.train
+(sum(tab.train)-sum(diag(tab.train)))*100/sum(tab.train)
+test.predict=predict(rf,x.test)
+tab.test=table(y.test,test.predict)
+tab.test
+(sum(tab.test)-sum(diag(tab.test)))*100/sum(tab.test)
+```
+
+Теперь можно посмотреть на влияние перменных. Самой важной оказалась переменная социальный статус, а мало значимой количество афроамериканцев.
+
+
+```{r}
+varImpPlot(rf, sort=F)
+```
+
+Убираем переменные "река" и "расстояние_2".
+
+```{r}
+x <- train[, 1:13]
+x.test <- test[ ,1:13]
+
+names(x)
+x = x[,-4]
+x = x[,-8]
+names(x)
+
+rf <- randomForest(x, y=y.1, ntree=n, mtry=floor(sqrt(ncol(train))),
+                   replace=TRUE, nodesize = nodesize1, maxnodes = max,
+                   importance=TRUE, localImp=FALSE,
+                   proximity=FALSE, norm.votes=TRUE, do.trace=n/10,
+                   keep.forest=TRUE, corr.bias=FALSE, keep.inbag=FALSE)
+rf
+
+
+train.predict=predict(rf,x)
+tab.train=table(y,train.predict)
+tab.train
+(sum(tab.train)-sum(diag(tab.train)))*100/sum(tab.train)
+test.predict=predict(rf,x.test)
+tab.test=table(y.test,test.predict)
+tab.test
+(sum(tab.test)-sum(diag(tab.test)))*100/sum(tab.test)
+
+varImpPlot(rf, sort=F)
+```
+
+
+Дальше убираем переменные "расстояние_1", "налог" , "разряженность_население", "афроамериканцы", "торговля", "преступность" и "загазованность". 
+
+
+```{r}
+x=x[,-7]
+x=x[,-7]
+x=x[,-2]
+x=x[,-7]
+x=x[,-2]
+x=x[,-1]
+x=x[,-1]
+names(x)
+
+rf <- randomForest(x, y=y.1, ntree=n, mtry=floor(sqrt(ncol(train))),
+                   replace=TRUE, nodesize = nodesize1, maxnodes = max,
+                   importance=TRUE, localImp=FALSE,
+                   proximity=FALSE, norm.votes=TRUE, do.trace=n/10,
+                   keep.forest=TRUE, corr.bias=FALSE, keep.inbag=FALSE)
+rf
+
+
+train.predict=predict(rf,x)
+tab.train=table(y,train.predict)
+tab.train
+(sum(tab.train)-sum(diag(tab.train)))*100/sum(tab.train)
+test.predict=predict(rf,x.test)
+tab.test=table(y.test,test.predict)
+tab.test
+(sum(tab.test)-sum(diag(tab.test)))*100/sum(tab.test)
+
+varImpPlot(rf, sort=F)
+```
+
+
+Затем удаляем переменные "старые" и "ученики".
+
+
+```{r}
+x=x[,-2]
+x=x[,-2]
+names(x)
+
+rf <- randomForest(x, y=y.1, ntree=n, mtry=floor(sqrt(ncol(train))),
+                   replace=TRUE, nodesize = nodesize1, maxnodes = max,
+                   importance=TRUE, localImp=FALSE,
+                   proximity=FALSE, norm.votes=TRUE, do.trace=n/10,
+                   keep.forest=TRUE, corr.bias=FALSE, keep.inbag=FALSE)
+rf
+
+
+train.predict=predict(rf,x)
+tab.train=table(y,train.predict)
+tab.train
+(sum(tab.train)-sum(diag(tab.train)))*100/sum(tab.train)
+test.predict=predict(rf,x.test)
+tab.test=table(y.test,test.predict)
+tab.test
+(sum(tab.test)-sum(diag(tab.test)))*100/sum(tab.test)
+
+varImpPlot(rf, sort=F)
+```
+
+##Gradient boosting machine.
+
+```{r}
+library(gbm)
+set.seed(3217)
+table(Boston$цена)
+```
+
+```{r, echo=T}
+ntree.1 <- 80
+nodesize.1 <-10
+
+gbm.res <- gbm(цена~. , data=train, 
+               distribution="gaussian", 
+               n.trees=ntree.1,
+               shrinkage=0.05, 
+               interaction.depth=5,
+               bag.fraction = 0.66,
+               n.minobsinnode = nodesize.1,
+               cv.folds = 0, 
+               keep.data=TRUE, 
+               verbose=TRUE) 
+```
+
+В начале также получится модель с переобучением, по тому же принципу подберем другие характеристики. 
+
+```{r, echo=T}
+ntree.1 <- 30
+nodesize.1 <-15
+
+gbm.res <- gbm(цена~. , data=train, 
+               distribution="gaussian", 
+               n.trees=ntree.1,
+               shrinkage=0.05, 
+               interaction.depth=5,
+               bag.fraction = 0.66,
+               n.minobsinnode = nodesize.1,
+               cv.folds = 0, 
+               keep.data=TRUE, 
+               verbose=TRUE) 
+```
+
+```{r, echo=T}
+data.predict <- predict(gbm.res, newdata = train[,1:13], n.trees = ntree.1) 
+data.predict[1:11] 
+
+data.pr.2 <- rep(0, nrow(train))
+data.pr.2[(data.predict > 0.5)& (data.predict < 1.5)] <- 1 
+data.pr.2[data.predict > 1.5] <- 2
+tab.train=table(train$цена, data.pr.2)
+tab.train
+(sum(tab.train)-sum(diag(tab.train)))*100/sum(tab.train)
+data.predict <- predict(gbm.res, newdata = test[,1:13], n.trees = ntree.1) 
+data.predict[1:11] 
+
+data.pr.2 <- rep(0, nrow(test))
+data.pr.2[(data.predict > 0.5)& (data.predict < 1.5)] <- 1 
+data.pr.2[data.predict > 1.5] <- 2
+tab.test=table(test$цена, data.pr.2)
+tab.test
+(sum(tab.test)-sum(diag(tab.test)))*100/sum(tab.test)
+```
+
+
+В итоге модель без переобучения.

@@ -1,0 +1,145 @@
+---
+title: "Дисперсионный анализ"
+author: "Тимофеев Игорь, 391 гр."
+date: '14 ноября 2016 г '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##Изучить влияние престижности района и типа постройки на площадь жилья(3п2)
+##Гипотезы
+Нулевая гипотеза: Престижность района и тип постройки статистически значимо не влияют на площадь жилья. 
+
+Альтернативная гипотеза: Существуют такие две группы из 4-х(00,01,10,11 - варианты комбинаций значений номинативных переменных, где первое - NE, второе - CUST), для которых площадь жилья статистически значимо отличается от площади для двух других.
+
+Или иначе говоря, существуют такие две группы, на которые можно разбить множество начальных данных(каждая из которых состоит из каких-то двух начальных групп), что межгрупповая дисперсия будет в значительное число раз больше, чем внутригрупповая, с учетом степеней свободы.
+
+Степень "значительности" определяется вероятностью того, что F значение для двух случайных выборок(по кол-ву совпадающих с нашими группами) из нормального распределения(со средним значением и среднеквадратичным отклонением из наших данных) будет больше вычисленного.
+
+Уровень значимости $\alpha$ зададим равным 0.05.
+
+Т.о. если p значение будет ниже 0.05, то можно считать, что F значение достаточно большое, чтобы считать статистически значимыми межгрупповые различия.
+```{r,echo=FALSE}
+
+library(ggplot2)
+library(caret)
+library(e1071)
+library(car)
+
+Albuq=read.table("~/Загрузки/Книги/Программирование/Теорвер/Zadachi/Albuquerque/Albuquerque Home Prices_data.txt",header = T)
+Albuq_Up=data.frame(SQFT=Albuq$SQFT,NE=as.factor(Albuq$NE),CUST=as.factor(Albuq$CUST))
+
+#Графики
+boxplot_Albuq_Up=ggplot(Albuq_Up,aes(Albuq_Up$NE,Albuq_Up$SQFT))+
+  geom_boxplot(aes(col=Albuq_Up$CUST))
+stat_summary_Albuq_Up=ggplot(Albuq_Up,aes(Albuq_Up$NE,Albuq_Up$SQFT))+
+  stat_summary(aes(col=Albuq_Up$CUST))
+density_all_Albuq_Up=ggplot(Albuq_Up,aes(Albuq_Up$SQFT))+
+  geom_density()
+density_NE_CUST_Albuq_Up=ggplot(Albuq_Up,aes(Albuq_Up$SQFT,fill=NE:CUST))+
+  geom_density(alpha=0.5)
+
+#Проверка на нормальность
+shtest_00=shapiro.test(x = Albuq_Up$SQFT[Albuq_Up$NE=="0"&Albuq_Up$CUST=="0"])
+shtest_01=shapiro.test(x = Albuq_Up$SQFT[Albuq_Up$NE=="0"&Albuq_Up$CUST=="1"])
+shtest_10=shapiro.test(x = Albuq_Up$SQFT[Albuq_Up$NE=="1"&Albuq_Up$CUST=="0"])
+shtest_11=shapiro.test(x = Albuq_Up$SQFT[Albuq_Up$NE=="1"&Albuq_Up$CUST=="1"])
+
+#Преобразование Бокса Кокса
+Lambda_Albuq_Up=BoxCoxTrans(Albuq_Up$SQFT)
+BoxCox_Albuq_Up=predict(Lambda_Albuq_Up,Albuq_Up$SQFT)
+Albuq_Up_BoxCox=data.frame(SQFT=BoxCox_Albuq_Up,NE=Albuq_Up$NE,CUST=Albuq_Up$CUST)
+
+#Графики для новых данных
+density_all_Albuq_Up_BoxCox=ggplot(Albuq_Up_BoxCox,aes(Albuq_Up_BoxCox$SQFT))+
+  geom_density()
+density_NE_CUST_Albuq_Up_BoxCox=ggplot(Albuq_Up_BoxCox,aes(Albuq_Up_BoxCox$SQFT,fill=NE:CUST))+
+  geom_density(alpha=0.5)
+
+#Проверка на нормальность для новых данных
+shtest_00_BoxCox=shapiro.test(x = Albuq_Up_BoxCox$SQFT[Albuq_Up_BoxCox$NE=="0"&Albuq_Up_BoxCox$CUST=="0"])
+shtest_01_BoxCox=shapiro.test(x = Albuq_Up_BoxCox$SQFT[Albuq_Up_BoxCox$NE=="0"&Albuq_Up_BoxCox$CUST=="1"])
+shtest_10_BoxCox=shapiro.test(x = Albuq_Up_BoxCox$SQFT[Albuq_Up_BoxCox$NE=="1"&Albuq_Up_BoxCox$CUST=="0"])
+shtest_11_BoxCox=shapiro.test(x = Albuq_Up_BoxCox$SQFT[Albuq_Up_BoxCox$NE=="1"&Albuq_Up_BoxCox$CUST=="1"])
+
+#Тест на гомогенность дисперсии
+disptest_NE=bartlett.test(SQFT ~ NE, Albuq_Up_BoxCox)
+disptest_CUST=bartlett.test(SQFT ~ CUST, Albuq_Up_BoxCox)
+
+#Дисперсионный анализ
+aov_Albuq_Up_BoxCox=aov(SQFT ~ NE*CUST, data=Albuq_Up_BoxCox)
+disp=summary(aov_Albuq_Up_BoxCox)
+
+```
+Сначала приведем данные к удобно для нас виду.
+```{r}
+str(Albuq_Up)
+```
+
+Теперь посмотрим на вид наших данных с помощью графиков.
+
+```{r}
+boxplot_Albuq_Up
+```
+
+По boxplot можно заметить, что престижность района не сильно влияет на значения площади, а вот необычный тип постройки соответствует большей площади.
+
+```{r}
+stat_summary_Albuq_Up
+```
+
+На графике с доверительными интервалами все же заметно сильное отличие между группами с обычным типом постройки и разными уровнями престижности, но для домов с необычным типом постройки это различие уже находится в рамках допустимого отклонения. Тогда как различия между группами обычного и необчного типа постройки - довольно сильное.
+
+```{r}
+density_all_Albuq_Up
+density_NE_CUST_Albuq_Up
+```
+
+По этик графикам можно предположить, что наше распределение не очень нормально. Точнее его части соотвествующие 00 и 10.
+
+Проверим это с помощью Шапиро теста.
+```{r}
+shtest_00
+shtest_01
+shtest_10
+shtest_11
+```
+
+Для случая 10 все плохо - распределение далеко от нормального.
+
+Применим уже знакомый алгоритм Бокса Кокса с $\lambda$ = `r Lambda_Albuq_Up$lambda`, получили новые данные Albuq_Up_BoxCox.
+
+Теперь посмотрим, что покажут их графики.
+```{r}
+density_all_Albuq_Up_BoxCox
+density_NE_CUST_Albuq_Up_BoxCox
+```
+
+Теперь распределение уже больше похожи на нормальные.
+
+Хотя график 11 может вызывать сомнения.
+
+Проверим на Шапиро тест.
+```{r}
+shtest_00_BoxCox
+shtest_01_BoxCox
+shtest_10_BoxCox
+shtest_11_BoxCox
+```
+
+В результате - все распределения нормальные.
+
+Проверим гомогенность дисперсий.
+```{r}
+disptest_CUST
+disptest_NE
+```
+
+Здесь все тоже в порядке. Можно запустить итоговый алгоритм AOV и вывести таблицу.
+```{r}
+disp
+```
+
+Видно, что как мы и предполагали, смотря на графики, именно по переменной CUST, обозначающей тип постройки, межгрупповое отклонение очень большое. И так как наше $\alpha$ было равно 0.05, то мы смело можем отклонить Нулевую гипотезу.
